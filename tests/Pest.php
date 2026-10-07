@@ -1,6 +1,10 @@
 <?php
 
+use App\Models\LicenseSetting;
+use App\Services\DnsLookup;
+use App\Services\LicenseVerifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\FakeDnsLookup;
 use Tests\TestCase;
 
 /*
@@ -44,7 +48,31 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Configure a fresh signing key pair and store a valid license.
+ */
+function validLicense(int $maxAssets = 50, ?int $days = 365): LicenseSetting
 {
-    // ..
+    $verifier = app(LicenseVerifier::class);
+    $pair = $verifier->generateKeyPair();
+    config(['iprep.license_public_key' => $pair['public'], 'iprep.license_private_key' => $pair['private']]);
+
+    $expiresAt = $days === null ? null : now()->addDays($days);
+
+    return LicenseSetting::create([
+        'license_key' => $verifier->issue('Test', $maxAssets, $expiresAt, null, $pair['private']),
+        'plan_name' => 'Test',
+        'max_assets' => $maxAssets,
+        'is_active' => true,
+        'expires_at' => $expiresAt,
+    ]);
+}
+
+/**
+ * @param  array<string, array<int, string>|null>  $aRecords
+ * @param  array<string, array<int, string>>  $mxRecords
+ */
+function fakeDns(array $aRecords = [], array $mxRecords = []): void
+{
+    app()->instance(DnsLookup::class, new FakeDnsLookup($aRecords, $mxRecords));
 }

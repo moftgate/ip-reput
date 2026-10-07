@@ -4,6 +4,10 @@ namespace App\Services;
 
 class DnsResolverService
 {
+    public function __construct(
+        protected DnsLookup $dns
+    ) {}
+
     /**
      * Resolves IPv4 addresses from domain (A and MX records)
      *
@@ -11,69 +15,31 @@ class DnsResolverService
      */
     public function resolve(string $target, string $type = 'domain'): array
     {
-        $resolved = [];
-
         if ($type === 'ip') {
             $ip = trim($target);
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-                $resolved[] = [
-                    'ip' => $ip,
-                    'record_type' => 'IP',
-                    'hostname' => null,
-                ];
-            }
 
-            return $resolved;
+            return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
+                ? [['ip' => $ip, 'record_type' => 'IP', 'hostname' => null]]
+                : [];
         }
 
-        $domain = idn_to_ascii(trim($target));
-        if (! $domain) {
-            $domain = trim($target);
+        $domain = idn_to_ascii(trim($target)) ?: trim($target);
+        $resolved = [];
+
+        foreach ($this->dns->a($domain) ?? [] as $ip) {
+            $resolved[] = ['ip' => $ip, 'record_type' => 'A', 'hostname' => $domain];
         }
 
-        // 1. Resolve A records
-        $aRecords = @dns_get_record($domain, DNS_A);
-        if (is_array($aRecords)) {
-            foreach ($aRecords as $rec) {
-                if (! empty($rec['ip'])) {
-                    $resolved[] = [
-                        'ip' => $rec['ip'],
-                        'record_type' => 'A',
-                        'hostname' => $domain,
-                    ];
-                }
-            }
-        }
-
-        // 2. Resolve MX records
-        $mxRecords = @dns_get_record($domain, DNS_MX);
-        if (is_array($mxRecords)) {
-            foreach ($mxRecords as $mx) {
-                $mxHost = $mx['target'] ?? null;
-                if ($mxHost) {
-                    $mxARecords = @dns_get_record($mxHost, DNS_A);
-                    if (is_array($mxARecords)) {
-                        foreach ($mxARecords as $rec) {
-                            if (! empty($rec['ip'])) {
-                                $resolved[] = [
-                                    'ip' => $rec['ip'],
-                                    'record_type' => 'MX',
-                                    'hostname' => $mxHost,
-                                ];
-                            }
-                        }
-                    }
-                }
+        foreach ($this->dns->mx($domain) as $mxHost) {
+            foreach ($this->dns->a($mxHost) ?? [] as $ip) {
+                $resolved[] = ['ip' => $ip, 'record_type' => 'MX', 'hostname' => $mxHost];
             }
         }
 
         // Benzersiz IP ve Record tipi eşleşmelerini koru
         $unique = [];
         foreach ($resolved as $item) {
-            $key = $item['ip'].'|'.$item['record_type'];
-            if (! isset($unique[$key])) {
-                $unique[$key] = $item;
-            }
+            $unique[$item['ip'].'|'.$item['record_type']] ??= $item;
         }
 
         return array_values($unique);

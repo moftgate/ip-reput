@@ -2,13 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Services\LicenseVerifier;
 use Illuminate\Database\Eloquent\Model;
 
 class LicenseSetting extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'license_key',
         'plan_name',
@@ -18,27 +16,41 @@ class LicenseSetting extends Model
         'contact_email',
     ];
 
+    protected $hidden = [
+        'license_key',
+    ];
+
     protected $casts = [
         'is_active' => 'boolean',
         'expires_at' => 'datetime',
         'max_assets' => 'integer',
     ];
 
+    /**
+     * A license is valid only when a signed key is stored, it verifies and it has not expired.
+     */
     public static function isLicenseValid(): bool
     {
         $setting = static::first();
-        if (! $setting) {
-            return true; // Default aktivasyon var
-        }
 
-        if (! $setting->is_active) {
+        return $setting !== null && $setting->isValid();
+    }
+
+    public function isValid(): bool
+    {
+        if (! $this->is_active || ! $this->license_key) {
             return false;
         }
 
-        if ($setting->expires_at && $setting->expires_at->isPast()) {
+        if (app(LicenseVerifier::class)->verify($this->license_key) === null) {
             return false;
         }
 
-        return true;
+        return ! ($this->expires_at && $this->expires_at->isPast());
+    }
+
+    public static function maxAssets(): int
+    {
+        return static::first()->max_assets ?? 0;
     }
 }

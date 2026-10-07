@@ -3,9 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\BlacklistProvider;
-use App\Models\LicenseSetting;
-use App\Models\MonitoredAsset;
-use App\Services\BlacklistCheckerService;
 use Illuminate\Database\Seeder;
 
 class BlacklistProviderSeeder extends Seeder
@@ -55,15 +52,6 @@ class BlacklistProviderSeeder extends Seeder
                 'description' => 'Kullanıcı şikayetleri ve spam trap bal küpleri ile tespit edilmiş SMTP spam IP adresleri.',
             ],
             [
-                'name' => 'Composite Blocking List (CBL)',
-                'host' => 'cbl.abuseat.org',
-                'threat_level' => 'critical',
-                'category' => 'abuse',
-                'is_counted' => true,
-                'delist_url' => 'https://www.abuseat.org/lookup.cgi',
-                'description' => 'Açık proxyler, trojan enfekte olmuş makineler ve spam gönderen botnetler.',
-            ],
-            [
                 'name' => 'DroneBL (Abuse Botnets & Exploits)',
                 'host' => 'dnsbl.dronebl.org',
                 'threat_level' => 'high',
@@ -71,24 +59,6 @@ class BlacklistProviderSeeder extends Seeder
                 'is_counted' => true,
                 'delist_url' => 'https://dronebl.org/lookup',
                 'description' => 'Botnet aktivitesi, IRC saldırıları ve açık port kötüye kullanımı gerçekleştiren IP adresleri.',
-            ],
-            [
-                'name' => 'SORBS Spam List',
-                'host' => 'spam.dnsbl.sorbs.net',
-                'threat_level' => 'medium',
-                'category' => 'spam',
-                'is_counted' => true,
-                'delist_url' => 'http://www.sorbs.net/delisting/overview.shtml',
-                'description' => 'Geçmişte veya yakın zamanda spam gönderdiği teyit edilmiş IP adresleri.',
-            ],
-            [
-                'name' => 'SORBS New (Recent Spam)',
-                'host' => 'new.spam.dnsbl.sorbs.net',
-                'threat_level' => 'medium',
-                'category' => 'spam',
-                'is_counted' => true,
-                'delist_url' => 'http://www.sorbs.net/delisting/overview.shtml',
-                'description' => 'Son 48 saat içerisinde tespit edilen yeni spam aktiviteleri.',
             ],
             [
                 'name' => 'UCEPROTECT Network - Level 1',
@@ -146,58 +116,7 @@ class BlacklistProviderSeeder extends Seeder
             );
         }
 
-        // 2. License Default Setting
-        LicenseSetting::updateOrCreate(
-            ['id' => 1],
-            [
-                'license_key' => 'IPREP-PRO-9842-7194-GLOBAL',
-                'plan_name' => 'Kurumsal Paket Lisansı',
-                'is_active' => true,
-                'expires_at' => now()->addYears(1),
-                'max_assets' => 100,
-                'contact_email' => 'noc@sirketiniz.com',
-            ]
-        );
-
-        // 3. Demo İzlenen Varlıklar
-        $assets = [
-            [
-                'name' => 'Şirket Ana Posta Sunucusu',
-                'type' => 'domain',
-                'target' => 'mail.google.com',
-                'frequency' => 'weekly',
-                'alert_email' => 'sistem@sirketiniz.com',
-            ],
-            [
-                'name' => 'Dış Statik Çıkış IP',
-                'type' => 'ip',
-                'target' => '1.1.1.1',
-                'frequency' => 'weekly',
-                'alert_email' => 'noc@sirketiniz.com',
-            ],
-            [
-                'name' => 'Kurumsal Web ve MX Alan Adı',
-                'type' => 'domain',
-                'target' => 'github.com',
-                'frequency' => 'monthly',
-                'alert_email' => 'admin@sirketiniz.com',
-            ],
-        ];
-
-        $checker = app(BlacklistCheckerService::class);
-
-        foreach ($assets as $assetData) {
-            $asset = MonitoredAsset::updateOrCreate(
-                ['target' => $assetData['target']],
-                $assetData
-            );
-
-            // İlk sorguyu çalıştır (Kural 02 & Nasıl çalışır gereği)
-            try {
-                $checker->checkAsset($asset);
-            } catch (\Throwable $e) {
-                // Ignore initial network timeout in offline test
-            }
-        }
+        // Kapanan veya başka listeye taşınan kaynakları kaldır (SORBS, CBL)
+        BlacklistProvider::whereNotIn('host', array_column($providers, 'host'))->delete();
     }
 }

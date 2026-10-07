@@ -6,6 +6,7 @@ use App\Models\LicenseSetting;
 use App\Models\MonitoredAsset;
 use App\Services\BlacklistCheckerService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 
 class RunReputationChecksCommand extends Command
 {
@@ -14,7 +15,9 @@ class RunReputationChecksCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'iprep:check {asset_id? : İsteğe bağlı izlenen varlık ID}';
+    protected $signature = 'iprep:check
+        {asset_id? : İsteğe bağlı izlenen varlık ID}
+        {--due : Yalnız haftalık/aylık sorgu zamanı gelmiş varlıkları kontrol et}';
 
     /**
      * The console command description.
@@ -50,22 +53,35 @@ class RunReputationChecksCommand extends Command
             return self::SUCCESS;
         }
 
-        $assets = MonitoredAsset::where('is_active', true)->get();
+        $assets = MonitoredAsset::where('is_active', true)
+            ->when($this->option('due'), fn (Builder $query) => $query->due())
+            ->get();
+
         $this->info("Toplam {$assets->count()} varlık için toplu kontrol başlatılıyor...");
 
         $this->output->progressStart($assets->count());
+        $failures = 0;
 
         foreach ($assets as $asset) {
             try {
                 $checker->checkAsset($asset);
             } catch (\Throwable $e) {
+                $failures++;
+                report($e);
                 $this->error("Hata ({$asset->target}): ".$e->getMessage());
             }
             $this->output->progressAdvance();
         }
 
         $this->output->progressFinish();
-        $this->info('Tüm varlıklar başarıyla kontrol edildi.');
+
+        if ($failures > 0) {
+            $this->warn("{$failures} varlık kontrol edilemedi.");
+
+            return self::FAILURE;
+        }
+
+        $this->info('Tüm varlıklar kontrol edildi.');
 
         return self::SUCCESS;
     }

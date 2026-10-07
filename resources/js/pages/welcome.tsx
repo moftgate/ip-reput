@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 
 interface ResolvedIp {
     id: number;
@@ -60,8 +60,6 @@ interface MonitoredAsset {
 }
 
 interface LicenseSetting {
-    id: number;
-    license_key: string;
     plan_name: string;
     is_active: boolean;
     expires_at?: string;
@@ -82,11 +80,23 @@ interface Stats {
     policy_providers: number;
 }
 
+interface TrendItem {
+    provider: string;
+    ip_address: string;
+    threat_level: 'clean' | 'low' | 'medium' | 'high' | 'critical';
+}
+
+interface Trend {
+    added: TrendItem[];
+    removed: TrendItem[];
+}
+
 interface Props {
     assets: MonitoredAsset[];
     selectedAsset?: MonitoredAsset | null;
     history: ReputationCheck[];
     latestFindings: ReputationFinding[];
+    trend: Trend;
     providers: BlacklistProvider[];
     license?: LicenseSetting | null;
     stats: Stats;
@@ -97,6 +107,7 @@ export default function Welcome({
     selectedAsset = null,
     history = [],
     latestFindings = [],
+    trend = { added: [], removed: [] },
     providers = [],
     license,
     stats,
@@ -113,8 +124,13 @@ export default function Welcome({
     const [newFrequency, setNewFrequency] = useState<'manual' | 'weekly' | 'monthly'>('weekly');
     const [newAlertEmail, setNewAlertEmail] = useState('');
 
-    const [licenseKey, setLicenseKey] = useState(license?.license_key || '');
-    const [licensePlan, setLicensePlan] = useState(license?.plan_name || 'Enterprise Suite');
+    const { flash, errors } = usePage().props as unknown as {
+        flash: { success?: string | null; error?: string | null };
+        errors: Record<string, string>;
+    };
+    const errorMessages = Object.values(errors ?? {});
+
+    const [licenseKey, setLicenseKey] = useState('');
     const [licenseEmail, setLicenseEmail] = useState(license?.contact_email || '');
 
     const handleCreateAsset = (e: React.FormEvent) => {
@@ -159,10 +175,12 @@ export default function Welcome({
         e.preventDefault();
         router.post('/license/update', {
             license_key: licenseKey,
-            plan_name: licensePlan,
             contact_email: licenseEmail,
         }, {
-            onSuccess: () => setIsLicenseModalOpen(false),
+            onSuccess: () => {
+                setIsLicenseModalOpen(false);
+                setLicenseKey('');
+            },
         });
     };
 
@@ -222,9 +240,9 @@ export default function Welcome({
                         </span>
                     </div>
                     <div className="hidden md:flex items-center gap-3 font-['ui-monospace'] text-[11px] text-[#e5e7eb]">
-                        <span>Lisans: {license?.plan_name || 'Enterprise'}</span>
+                        <span>Lisans: {license?.plan_name ?? 'Yok'}</span>
                         <span className="text-[#3d3d3f]">•</span>
-                        <span className="text-[#34d399] font-medium">{license?.is_active ? 'Aktif' : 'Geçersiz'}</span>
+                        <span className={license?.is_active ? 'text-[#34d399] font-medium' : 'text-[#f87171] font-medium'}>{license?.is_active ? 'Aktif' : 'Geçersiz'}</span>
                     </div>
                 </div>
             </div>
@@ -285,12 +303,26 @@ export default function Welcome({
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                             </svg>
                         </button>
+
+                        <button
+                            onClick={() => router.post('/logout')}
+                            className="px-4 py-2 rounded-[9999px] text-[13px] font-medium text-[#71717a] hover:text-[#022c22] border border-[#e5e7eb] hover:bg-[#f5f5f5] transition"
+                        >
+                            Çıkış
+                        </button>
                     </div>
                 </div>
             </header>
 
             {/* Main Content (max-width 1200px, 32px padding, 8px base units, 1px #e5e7eb borders) */}
             <main className="max-w-[1200px] mx-auto px-6 py-10 flex-1 w-full space-y-10">
+                {flash?.success && (
+                    <div className="p-4 rounded-[12px] bg-[#d2f2e7] border border-[#a7f3d0] text-[13px] text-[#007a55]">{flash.success}</div>
+                )}
+                {flash?.error && (
+                    <div className="p-4 rounded-[12px] bg-[#fef2f2] border border-[#fecaca] text-[13px] text-[#dc2626]">{flash.error}</div>
+                )}
+
 
                 {/* Hero / Header Section with Upstash Headline aesthetics */}
                 <div className="py-2">
@@ -680,6 +712,35 @@ export default function Welcome({
                                         </span>
                                     </div>
 
+                                    {(trend.added.length > 0 || trend.removed.length > 0) && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                            <div className="p-3 rounded-[12px] bg-[#fef2f2] border border-[#fecaca]">
+                                                <div className="font-semibold text-[#dc2626] mb-1">Son sorguda eklenen kaynaklar ({trend.added.length})</div>
+                                                {trend.added.length === 0 ? (
+                                                    <p className="text-[#71717a]">Yok</p>
+                                                ) : (
+                                                    trend.added.map((item) => (
+                                                        <p key={`${item.provider}-${item.ip_address}`} className="text-[#022c22]">
+                                                            {item.provider} <span className="font-['ui-monospace'] text-[#71717a]">{item.ip_address}</span>
+                                                        </p>
+                                                    ))
+                                                )}
+                                            </div>
+                                            <div className="p-3 rounded-[12px] bg-[#d2f2e7] border border-[#a7f3d0]">
+                                                <div className="font-semibold text-[#007a55] mb-1">Listeden çıkaran kaynaklar ({trend.removed.length})</div>
+                                                {trend.removed.length === 0 ? (
+                                                    <p className="text-[#71717a]">Yok</p>
+                                                ) : (
+                                                    trend.removed.map((item) => (
+                                                        <p key={`${item.provider}-${item.ip_address}`} className="text-[#022c22]">
+                                                            {item.provider} <span className="font-['ui-monospace'] text-[#71717a]">{item.ip_address}</span>
+                                                        </p>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="divide-y divide-[#e5e7eb]">
                                         {history.length === 0 ? (
                                             <p className="text-xs text-[#71717a] italic py-4">Bu varlık için henüz sorgu geçmişi bulunmuyor.</p>
@@ -701,9 +762,15 @@ export default function Welcome({
 
                                                     <div className="flex items-center gap-3">
                                                         <span className="font-['ui-monospace'] text-[#71717a]">
-                                                            {check.counted_threat_count > 0 ? `${check.counted_threat_count} Tehdit` : 'Temiz'}
+                                                            {check.status !== 'completed' ? '—' : check.counted_threat_count > 0 ? `${check.counted_threat_count} Tehdit` : 'Temiz'}
                                                         </span>
-                                                        {getThreatBadge(check.highest_threat_level)}
+                                                        {check.status === 'completed' ? (
+                                                            getThreatBadge(check.highest_threat_level)
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-3 py-1 rounded-[9999px] text-xs font-medium bg-[#f5f5f5] text-[#71717a] border border-[#e5e7eb]">
+                                                                {check.status === 'failed' ? 'Başarısız' : 'Çalışıyor'}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))
@@ -732,6 +799,13 @@ export default function Welcome({
                         </p>
 
                         <form onSubmit={handleCreateAsset} className="mt-5 space-y-4">
+                            {errorMessages.length > 0 && (
+                                <div className="p-3 rounded-[12px] bg-[#fef2f2] border border-[#fecaca] text-[12px] text-[#dc2626] space-y-1">
+                                    {errorMessages.map((message) => (
+                                        <p key={message}>{message}</p>
+                                    ))}
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-[12px] font-semibold text-[#022c22] mb-1">Varlık Tipi</label>
                                 <div className="grid grid-cols-2 gap-2">
@@ -843,6 +917,13 @@ export default function Welcome({
                         </p>
 
                         <form onSubmit={handleUpdateLicense} className="mt-5 space-y-4">
+                            {errorMessages.length > 0 && (
+                                <div className="p-3 rounded-[12px] bg-[#fef2f2] border border-[#fecaca] text-[12px] text-[#dc2626] space-y-1">
+                                    {errorMessages.map((message) => (
+                                        <p key={message}>{message}</p>
+                                    ))}
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-[12px] font-semibold text-[#022c22] mb-1">Lisans Anahtarı</label>
                                 <input
@@ -854,15 +935,9 @@ export default function Welcome({
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-[12px] font-semibold text-[#022c22] mb-1">Paket Adı</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={licensePlan}
-                                    onChange={(e) => setLicensePlan(e.target.value)}
-                                    className="w-full px-3.5 py-2 rounded-[8px] bg-[#ffffff] border border-[#e5e7eb] text-[#022c22] text-[13px] focus:outline-none focus:border-[#10b981]"
-                                />
+                            <div className="flex justify-between text-[12px] text-[#71717a]">
+                                <span>Paket:</span>
+                                <span className="text-[#022c22] font-medium">{license?.plan_name ?? 'Lisans yok'}</span>
                             </div>
 
                             <div>
@@ -878,7 +953,7 @@ export default function Welcome({
                             <div className="p-3.5 rounded-[12px] bg-[#f5f5f5] border border-[#e5e7eb] text-[12px] text-[#71717a] space-y-1.5">
                                 <div className="flex justify-between">
                                     <span>Durum:</span>
-                                    <span className="text-[#007a55] font-semibold">{license?.is_active ? 'Aktif Lisans' : 'Pasif'}</span>
+                                    <span className={license?.is_active ? 'text-[#007a55] font-semibold' : 'text-[#dc2626] font-semibold'}>{license?.is_active ? 'Aktif Lisans' : 'Geçersiz / Yok'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span>Bitiş Tarihi:</span>

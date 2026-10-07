@@ -46,7 +46,19 @@ E-posta sunucuları dış dünyaya bağlanırken küresel kara listeler (RBL/DNS
 - Composer
 - Node.js `>= 18` & NPM / PNPM
 
-### Adımlar
+### Hızlı Kurulum (Ubuntu Otomatik Script)
+
+Tek bir komutla PHP 8.3, Composer, Node.js, Nginx, Supervisor ve Cron yapılandırmasını tamamlamak için:
+
+```bash
+git clone https://github.com/moftgate/ip-reput.git
+cd ip-reput
+sudo bash install.sh --domain panel.sirketiniz.com
+```
+
+---
+
+### Manuel Kurulum Adımları
 
 1. **Depoyu klonlayın:**
    ```bash
@@ -60,11 +72,29 @@ E-posta sunucuları dış dünyaya bağlanırken küresel kara listeler (RBL/DNS
    ```
    *(Bu komut `composer install`, `.env` kopyalama, `key:generate`, `migrate` ve `npm install` adımlarını otomatik tamamlar).*
 
-3. **Geliştirme sunucusunu başlatın:**
+3. **Kara liste kaynaklarını yükleyin:**
+   ```bash
+   php artisan db:seed
+   ```
+
+4. **Panel kullanıcısı oluşturun:**
+   ```bash
+   php artisan iprep:user admin@sirket.com
+   ```
+
+5. **Lisansı tanımlayın:** `.env` içine satıcının verdiği `IPREP_LICENSE_PUBLIC_KEY` değerini yazın. Lisans anahtarını paneldeki lisans penceresine girin. Satıcı tarafında anahtar çifti `php artisan iprep:license --keypair`, lisans anahtarı `php artisan iprep:license "Paket" --max-assets=50 --days=365` ile üretilir. Özel anahtar müşteri kurulumuna konmaz.
+
+6. **Geliştirme sunucusunu başlatın:**
    ```bash
    composer run dev
-   # veya eşzamanlı: php artisan serve & npm run dev
    ```
+
+7. **Üretimde kuyruk ve zamanlayıcıyı çalıştırın:** Sorgular kuyrukta çalışır. Haftalık/aylık sorgular zamanlayıcı ile başlar.
+   ```bash
+   php artisan queue:work
+   # crontab: * * * * * php /yol/artisan schedule:run
+   ```
+   E-posta uyarıları için `.env` içindeki `MAIL_*` ayarlarını doldurun.
 
 ---
 
