@@ -13,7 +13,7 @@ class CreateUserCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'iprep:user {email : Kullanıcı e-postası} {--name= : Görünen ad}';
+    protected $signature = 'iprep:user {email : Kullanıcı e-postası} {--name= : Görünen ad} {--password= : Kullanıcı şifresi}';
 
     /**
      * The console command description.
@@ -28,7 +28,7 @@ class CreateUserCommand extends Command
     public function handle(): int
     {
         $email = (string) $this->argument('email');
-        $password = (string) $this->secret('Şifre (en az 12 karakter)');
+        $password = (string) ($this->option('password') ?: $this->secret('Şifre (en az 12 karakter)'));
 
         $validator = Validator::make(
             ['email' => $email, 'password' => $password],

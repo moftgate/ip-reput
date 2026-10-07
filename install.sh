@@ -60,6 +60,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="${APP_DIR:-$SCRIPT_DIR}"
 DOMAIN="${APP_DOMAIN:-localhost}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-0}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 
 # Parametre işleme
 while [[ $# -gt 0 ]]; do
@@ -72,6 +74,14 @@ while [[ $# -gt 0 ]]; do
             TARGET_DIR="$2"
             shift 2
             ;;
+        --admin-email)
+            ADMIN_EMAIL="$2"
+            shift 2
+            ;;
+        --admin-password)
+            ADMIN_PASSWORD="$2"
+            shift 2
+            ;;
         -y|--non-interactive|--yes)
             NON_INTERACTIVE=1
             shift
@@ -80,10 +90,12 @@ while [[ $# -gt 0 ]]; do
             echo -e "${BOLD}Kullanım:${NC} sudo bash install.sh [seçenekler]"
             echo ""
             echo "Seçenekler:"
-            echo "  -d, --domain <domain>     Sunucu alan adı veya IP adresi (Varsayılan: localhost)"
-            echo "  --path <dizin>            Kurulum yapılacak proje dizini (Varsayılan: mevcut dizin)"
-            echo "  -y, --yes                 Etkileşimsiz otomatik kurulum modu"
-            echo "  -h, --help                Bu yardım mesajını gösterir"
+            echo "  -d, --domain <domain>           Sunucu alan adı veya IP adresi (Varsayılan: localhost)"
+            echo "  --path <dizin>                  Kurulum yapılacak proje dizini (Varsayılan: mevcut dizin)"
+            echo "  --admin-email <email>           Otomatik oluşturulacak yönetici e-posta adresi"
+            echo "  --admin-password <şifre>        Yönetici şifresi (en az 12 karakter)"
+            echo "  -y, --yes                       Etkileşimsiz otomatik kurulum modu"
+            echo "  -h, --help                      Bu yardım mesajını gösterir"
             exit 0
             ;;
         *)
@@ -383,18 +395,25 @@ systemctl enable "php${PHP_VERSION}-fpm"
 
 # 14. Panel Kullanıcısı Oluşturma
 log_step "Panel yöneticisi kullanıcı kurulumu..."
-if [[ "${NON_INTERACTIVE}" -eq 0 ]]; then
+if [[ -n "${ADMIN_EMAIL}" ]]; then
+    log_info "Yönetici kullanıcısı oluşturuluyor: ${ADMIN_EMAIL}"
+    if [[ -n "${ADMIN_PASSWORD}" ]]; then
+        php "${TARGET_DIR}/artisan" iprep:user "${ADMIN_EMAIL}" --password="${ADMIN_PASSWORD}" || true
+    else
+        php "${TARGET_DIR}/artisan" iprep:user "${ADMIN_EMAIL}" || true
+    fi
+elif [[ "${NON_INTERACTIVE}" -eq 0 ]]; then
     echo ""
     read -rp "Şimdi bir panel yönetici kullanıcısı oluşturmak ister misiniz? [E/h]: " CREATE_ADMIN
     CREATE_ADMIN=${CREATE_ADMIN:-E}
     if [[ "${CREATE_ADMIN}" =~ ^[eEyY]$ ]]; then
-        read -rp "Yönetici E-posta Adresi: " ADMIN_EMAIL
-        if [[ -n "${ADMIN_EMAIL}" ]]; then
-            php "${TARGET_DIR}/artisan" iprep:user "${ADMIN_EMAIL}" || true
+        read -rp "Yönetici E-posta Adresi: " PROMPT_EMAIL
+        if [[ -n "${PROMPT_EMAIL}" ]]; then
+            php "${TARGET_DIR}/artisan" iprep:user "${PROMPT_EMAIL}" || true
         fi
     fi
 else
-    log_info "Non-interactive mod: Panel kullanıcısını daha sonra 'php artisan iprep:user <email>' ile oluşturabilirsiniz."
+    log_info "Panel kullanıcısını daha sonra 'php artisan iprep:user <email>' ile oluşturabilirsiniz."
 fi
 
 # --- Tamamlanma Özeti ---
