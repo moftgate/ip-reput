@@ -48,13 +48,41 @@ E-posta sunucuları dış dünyaya bağlanırken küresel kara listeler (RBL/DNS
 
 ### Hızlı Kurulum (Ubuntu Otomatik Script)
 
-Tek bir komutla PHP 8.3, Composer, Node.js, Nginx, Supervisor ve Cron yapılandırmasını tamamlamak için:
+Ubuntu 20.04 / 22.04 / 24.04 LTS sunucularda PHP 8.3, Composer, Node.js 20.x, Nginx, Supervisor (Kuyruk Yöneticisi) ve Cron (Zamanlayıcı) yapılandırmasını tek seferde kurmak için:
 
 ```bash
 git clone https://github.com/moftgate/ip-reput.git
 cd ip-reput
 sudo bash install.sh --domain panel.sirketiniz.com
 ```
+
+#### Scriptin Otomatik Gerçekleştirdiği Adımlar:
+1. **Sistem Paketleri & Araçlar:** Gerekli sistem araçlarını (`curl`, `git`, `unzip`, `sqlite3`, `supervisor`, `nginx`) kurar.
+2. **PHP 8.3 & Eklentiler:** Ondřej Surý PPA üzerinden PHP 8.3 ve tüm gerekli uzantıları (`fpm`, `sqlite3`, `curl`, `mbstring`, `intl`, `xml`, vb.) yükler.
+3. **Node.js & Composer:** Composer ve NodeSource üzerinden Node.js 20.x LTS kurulumunu tamamlar.
+4. **Ortam & Veritabanı:** `.env` dosyasını yapılandırır, SQLite veritabanını oluşturur, migration ve DNSBL seed verilerini yükler (`php artisan db:seed`).
+5. **Vite Build & Cache:** Arayüz varlıklarını derler (`npm run build`) ve Laravel önbelleklerini optimize eder.
+6. **Web Sunucusu (Nginx):** Reverse proxy ve FastCGI yönlendirmelerini içeren Nginx sanal sunucu kaydını oluşturur ve yayına alır.
+7. **Kuyruk Yöneticisi (Supervisor):** Arka plan DNSBL taramaları için 2 adet çalışan `queue:work` prosesini yapılandırıp başlatır.
+8. **Zamanlayıcı (Cron):** Düzenli itibar denetimleri için crontab kaydını (`artisan schedule:run`) ekler.
+9. **Yönetici Kullanıcısı:** Kurulum sonunda etkileşimli olarak e-posta ve şifre sorarak ilk panel kullanıcısını oluşturur.
+
+#### İsteğe Bağlı Parametreler & Sessiz Kurulum:
+```bash
+# Otomatik / Sessiz Kurulum (CI/CD veya otomasyon betikleri için)
+sudo bash install.sh -y \
+  --domain panel.sirketiniz.com \
+  --admin-email admin@sirket.com \
+  --admin-password "GucluSifre123!"
+```
+
+| Parametre | Açıklama | Varsayılan |
+| :--- | :--- | :--- |
+| `-d, --domain <domain>` | Panel alan adı veya IP adresi | `localhost` |
+| `--path <dizin>` | Kurulum yapılacak proje dizini | Mevcut dizin |
+| `--admin-email <email>` | Otomatik oluşturulacak yönetici e-postası | - |
+| `--admin-password <şifre>` | Yönetici şifresi (en az 12 karakter) | - |
+| `-y, --yes` | Etkileşimsiz otomatik onay modu | `0` (Kapalı) |
 
 ---
 
